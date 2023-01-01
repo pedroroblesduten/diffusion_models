@@ -1,11 +1,11 @@
 import torch
-import torch.nn
+import torch.nn as nn
 from modules import SelfAttention, ConvBlock, UpSampleBlock, DownSampleBlock
 
 class Enconder(nn.Module):
     def __init__(self, in_c=3, out_c=3):
-        super().__init()
-        self.conv1 = ConvBlock(in_c, 64)
+        super().__init__()
+        self.conv1 = ConvBlock(in_c, 64, residual=False)
         self.down1 = DownSampleBlock(64, 128)
         self.self_attention1 = SelfAttention(128, 32)
         self.down2 = DownSampleBlock(128, 256)
@@ -14,12 +14,13 @@ class Enconder(nn.Module):
         self.self_attention4 = SelfAttention(256, 8)
 
     def forward(self, x, t):
+        print('-- STARTING ENCODER --')
         x1 = self.conv1(x)
         x2 = self.down1(x1, t)
         x2 = self.self_attention1(x2)
-        x3 = self.down2(x3, t)
+        x3 = self.down2(x2, t)
         x3 = self.self_attention2(x3)
-        x4 = self.down3(x4, t)
+        x4 = self.down3(x3, t)
         x4 = self.self_attention4(x4)
         return x1, x2, x3, x4
 
@@ -31,6 +32,7 @@ class BottleNeck(nn.Module):
         self.bot3 = ConvBlock(mid_c, out_c, residual=False)
 
     def forward(self, x):
+        print('-- STARTING BOTTLENECK --')
         x = self.bot1(x)
         x = self.bot2(x)
         x = self.bot3(x)
@@ -48,6 +50,7 @@ class Decoder(nn.Module):
         self.conv1 = nn.Conv2d(64, 3, kernel_size=1)
 
     def forward(self, x1, x2, x3, x4, t):
+        print('-- STARTING DECODER --')
         x = self.up1(x4, x3, t)
         x = self.self_att1(x)
         x = self.up2(x, x2, t)
@@ -80,21 +83,23 @@ class UNet(nn.Module):
         return pos_enc
 
     def forward(self, x, t, y):
+        print('-> Starting UNET <-')
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
-        if y is note None:
+        if y is not None:
             t += self.label_emb(y)
 
         x1, x2, x3, x4 = self.encoder(x, t)
         x4 = self.bottle_neck(x4)
-        output = self.decoder(x1, x2, x3, x4)
+        output = self.decoder(x1, x2, x3, x4, t)
+        print('-> Finished UNET <-')
         return output
 
 
 
 
 if __name__ == '__main__':
-    net = Unet(num_classes=10, device='cpu')
+    net = UNet(num_classes=10, device='cpu')
     print(sum([p.numel() for p in net.parameters()]))
     x = torch.randn(3, 3, 64, 64)
     t = x.new_tensor([500]*x.shape[0]).long()
