@@ -27,7 +27,7 @@ class SelfAttention(nn.Module):
         x = x.swapaxes(2, 1).view(-1, self.channels, self.size, self.size)
         return x
 
-class DoubleConv(nn.Module):
+class ConvBlock(nn.Module):
     def __init__(self, in_c, out_c, mid_c=None, residual=True):
         super().__init()
         
@@ -49,6 +49,47 @@ class DoubleConv(nn.Module):
         else:
             x = h
         return x
+
+class DownSampleBlock(nn.Module):
+    def __init(self, in_c, out_c, emb_dim)
+        super().__init()
+
+        self.block1 = nn.Sequential(
+            nn.MaxPool2d(2),
+            ConvBlock(in_c, out_c, residual=False),
+            ConvBlock(in_c, out_c, residual=True)
+        )
+        self.embedding = nn.Sequential](
+            nn.SiLU(),
+            nn.Linear(emb_dim, out_c)
+        )
+
+    def forward(self, x, t):
+        x = self.block1(x)
+        emb = self.embedding(t)[:, :, None, None].repeat(1, 1, x.shape[-2], x.shape[-1])
+        return x + emb
+
+class UpSampleBlock(nn.Module):
+    def __init__(self, in_c, out_c, emb_dim):
+        super().__init()
+        self.upsample = nn.Upsample(scale_factor=2,
+                                    mode='bilinear'),
+                                    align_corners=True)
+        self.block1 = nn.Sequential(
+            ConvBlock(in_c, in_c, residual=True),
+            ConvBlock(in_c, out_c, in_c//2)
+        )
+        self.embedding = nn.Sequential(
+            nn.SiLU(),
+            nn.Linear(emb_dim, out_c)
+        )
+
+    def forward(self, x, skip_x, t):    
+            x = self.upsample(x)
+            x = torch.cat([skip_x, x], dim=1)
+            x = self.block1(x)
+            emb = self.embedding(t)[:, :, None, None].repeat(1, 1, x.shape[-2], x.shape[-1])
+            return x + emb
 
 
 
