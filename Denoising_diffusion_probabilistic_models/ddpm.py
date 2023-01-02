@@ -70,6 +70,8 @@ def train(args):
     mse = nn.MSELoss()
     diffusion = Diffusion(img_size=args.image_size, device=device)
     l = len(dataloader)
+    ema = EMA(beta=0.995)
+    ema_model = copy.deepcopy(model).eval().requires_grad_(False)
 
     for epoch in range(args.epochs):
         pbar = tqdm(dataloader)
@@ -83,10 +85,13 @@ def train(args):
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+            ema.step_ema(ema_model, model)
              
             pbar.set_postfix(MSE=loss.item())
         sampled_images = diffusion.sample(model, n=images.shape[0])
+        ema_sampled = diffusion.sample(ema_model, n=images.shaep[0], labels=labels)
         save_images(sampled_images, os.path.join('results', args.run_name, f'{epoch}.jpg'))
+        save_images(ema_sampled, os.path.join('results', args.run_name, f'{epoch}_EMA.jpg'))
         torch.save(model.state_dict(), os.path.join('models', args.run_name, f'ckpt.pt'))
 
 def launch():
